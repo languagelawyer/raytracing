@@ -1,32 +1,33 @@
+#include "camera.hpp"
+#include "ray.hpp"
+#include "types.hpp"
+
 #include <SFML/Graphics.hpp>
 
+#include <glm/geometric.hpp>
+
 #include <stdexcept>
+#include <vector>
+
+using namespace rt;
 
 
-sf::Image paint(unsigned width, unsigned height)
+color ray_color(const ray& r)
 {
-	sf::Image ret;
-	ret.create(width, height);
+	auto dir = glm::normalize(r.direction);
+	auto a = (dir.y + 1) / 2;
 
-	for (unsigned y = 0; y < height; y++)
-	{
-		for (unsigned x = 0; x < width; x++)
-		{
-			sf::Uint8 r = 255.999 * x / (width - 1);
-			sf::Uint8 g = 255.999 * y / (height - 1);
-			sf::Uint8 b = 0;
-
-			ret.setPixel(x, y, {r, g, b});
-		}
-	}
-
-	return ret;
+	return (1 - a) * color(1, 1, 1) + a * color(.5, .7, 1);
 }
 
 int main()
 {
-	constexpr int window_w = 256;
-	constexpr int window_h = 256;
+	const int window_w = 320;
+	const int window_h = 240;
+
+	std::vector<color> buf;
+	std::vector<sf::Uint8> rgba;
+	sf::Image image;
 
 	sf::RenderWindow window({window_w, window_h}, "");
 	while (window.isOpen())
@@ -54,8 +55,22 @@ int main()
 		{
 			auto [width, height] = window.getSize();
 
+			buf.resize(width * height);
+			camera{}.render({ width, height, buf.data() }, ray_color);
+
+			rgba.resize(4 * width * height);
+			for (unsigned i = 0; i < width * height; i++)
+			{
+				const auto& color = buf.data()[i];
+
+				for (int j = 0; j < 3; j++) rgba[4 * i + j] = 255.999 * color[j];
+				rgba[4 * i + 3] = 255;
+			}
+
+			image.create(width, height, rgba.data());
+
 			sf::Texture texture;
-			if (!texture.loadFromImage(paint(width, height)))
+			if (!texture.loadFromImage(image))
 				throw std::runtime_error("texture.loadFromImage");
 			sf::Sprite sprite(texture);
 
