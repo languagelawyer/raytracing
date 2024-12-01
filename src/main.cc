@@ -5,6 +5,7 @@
 #include <SFML/Graphics.hpp>
 
 #include <glm/geometric.hpp>
+#include <glm/gtx/intersect.hpp>
 
 #include <stdexcept>
 #include <vector>
@@ -14,7 +15,12 @@ using namespace rt;
 
 color ray_color(const ray& r)
 {
-	auto dir = glm::normalize(r.direction);
+	const auto& dir = r.direction;
+
+	vec3 pos, nrm;
+	if (glm::intersectRaySphere(r.origin, dir, point3(0, 0, 1), 0.5, pos, nrm))
+		return (nrm + 1_flt) / 2_flt;
+
 	auto a = (dir.y + 1) / 2;
 
 	return (1 - a) * color(1, 1, 1) + a * color(.5, .7, 1);
