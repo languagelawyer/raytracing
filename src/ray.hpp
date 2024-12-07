@@ -6,17 +6,21 @@
 
 namespace rt
 {
-	struct ray
+	class ray
 	{
-		const point3 origin;
-		const vec3 direction;
+		point3 o;
+		vec3 dir;
 
-		ray(point3 origin, const vec3& dir)
-		: origin(std::move(origin))
-		, direction(glm::normalize(dir))
+	public:
+		ray(point3 origin, const vec3& direction)
+		: o(std::move(origin))
+		, dir(glm::normalize(direction))
 		{}
 
+		const point3& origin() const { return o; }
+		const vec3& direction() const { return dir; }
+
 		auto at(flt t) const
-		{ return origin + t * direction; }
+		{ return o + t * dir; }
 	};
 }

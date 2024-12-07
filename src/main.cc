@@ -15,10 +15,10 @@ using namespace rt;
 
 color ray_color(const ray& r)
 {
-	const auto& dir = r.direction;
+	const auto& dir = r.direction();
 
 	vec3 pos, nrm;
-	if (glm::intersectRaySphere(r.origin, dir, point3(0, 0, 1), 0.5, pos, nrm))
+	if (glm::intersectRaySphere(r.origin(), dir, point3(0, 0, 1), 0.5, pos, nrm))
 		return (nrm + 1_flt) / 2_flt;
 
 	auto a = (dir.y + 1) / 2;
