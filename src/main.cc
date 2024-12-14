@@ -146,7 +146,8 @@ public:
 
 int main()
 {
-	std::vector<color> buf, sum;
+	std::vector<ray> rays;
+	std::vector<color> sum;
 	unsigned total = 0;
 
 	std::vector<sf::Uint8> rgba;
@@ -177,7 +178,12 @@ int main()
 			sf::FloatRect rect(0, 0, width, height);
 			window.setView(sf::View(rect));
 
-			buf.resize(width * height);
+			camera cam(width, height);
+			rays.clear();
+			for (auto y = 0u; y < height; y++)
+				for (auto x = 0u; x < width; x++)
+					rays.push_back(cam(x, y));
+
 			sum.clear();
 			sum.resize(width * height);
 			total = 0;
@@ -185,12 +191,9 @@ int main()
 		}
 
 no_events:
-		camera{}.render({ width, height, buf.data() }, [&](const ray& r) {
-			return w.ray_color(r);
-		});
 		total++;
 
-		for (auto i = 0u; i < sum.size(); i++) sum[i] += buf[i];
+		for (auto i = 0u; i < sum.size(); i++) sum[i] += w.ray_color(rays[i]);
 		for (auto i = 0u; i < sum.size(); i++)
 		{
 			auto c = sum[i] / flt(total);

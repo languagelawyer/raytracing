@@ -15,18 +15,21 @@ namespace rt
 	 */
 	struct camera
 	{
-		using query_f = std::function<color(const ray&)>;
+		camera(std::size_t width, std::size_t height);
 
-		struct buf
+		ray operator()(std::size_t x, std::size_t y) const
 		{
-			const std::size_t width;
-			const std::size_t height;
+			auto pixel = pixel00 + flt(x) * du + flt(y) * dv;
+			auto direction = pixel - camera_pos;
 
-			color* const buf;
+			return { camera_pos, direction };
+		}
 
-			color& operator()(std::size_t x, std::size_t y);
-		};
-
-		void render(buf buf, query_f query);
+	private:
+		point3 camera_pos = { 0, 0, 0 };
+		vec3 du;
+		vec3 dv;
+		point3 top_left;
+		point3 pixel00;
 	};
 }
