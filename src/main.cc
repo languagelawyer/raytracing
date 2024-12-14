@@ -1,6 +1,7 @@
 #include "camera.hpp"
 #include "hittable.hpp"
 #include "ray.hpp"
+#include "threadpool.hpp"
 #include "types.hpp"
 
 #include <SFML/Graphics.hpp>
@@ -23,7 +24,7 @@
 using namespace rt;
 
 std::random_device rd;
-std::mt19937 engine(rd());
+thread_local std::mt19937 engine(rd());
 
 class sky : public hittable
 {
@@ -93,11 +94,9 @@ public:
 	}
 };
 
+template<std::size_t maxHits>
 class world
 {
-	const std::size_t maxHits;
-	std::vector<hit_record> hits;
-
 	std::vector<std::shared_ptr<hittable>> objects = {
 		std::make_shared<sky>(),
 		std::make_shared<diffuse_sphere>(point3(0, 0, 1), 0.5),
@@ -105,21 +104,19 @@ class world
 	};
 
 public:
-	world(std::size_t maxHits) : maxHits(maxHits) { hits.reserve(maxHits); }
-
 	color ray_color(const ray& r)
 	{
-		hits.clear();
+		std::size_t i = 0;
+		hit_record hits[maxHits];
 
 		auto cur_ray = r;
-		for (std::size_t i = 0; i < maxHits; i++)
+		while (i < maxHits)
 		{
-			hit_record current_hit = {
+			auto& closest_hit = hits[i++];
+			hit_record current_hit = closest_hit = {
 				.t = std::numeric_limits<flt>::infinity(),
 				.material = [](color&) { /* does nothing */ },
 			};
-			hits.push_back(current_hit);
-			auto& closest_hit = hits.back();
 
 			for (const auto& o : objects)
 			{
@@ -137,8 +134,7 @@ public:
 		}
 
 		color ret(0, 0, 0);
-		for (auto hit = std::rbegin(hits); hit != std::rend(hits); ++hit)
-			hit->material(ret);
+		while (i--) hits[i].material(ret);
 
 		return ret;
 	}
@@ -146,6 +142,7 @@ public:
 
 int main()
 {
+	std::vector<int> indices;
 	std::vector<ray> rays;
 	std::vector<color> sum;
 	unsigned total = 0;
@@ -153,10 +150,15 @@ int main()
 	std::vector<sf::Uint8> rgba;
 	sf::Image image;
 
-	world w(16);
+	world<16> w;
+	auto fn  = [&](int idx) {
+		auto i = indices[idx];
+		sum[i] += w.ray_color(rays[i]);
+	};
+	threadpool pool(fn, std::thread::hardware_concurrency() ?: 2);
 
-	unsigned width = 480;
-	unsigned height = 360;
+	unsigned width = 800;
+	unsigned height = 600;
 	sf::RenderWindow window({width, height}, "");
 	while (window.isOpen())
 	{
@@ -178,11 +180,12 @@ int main()
 			sf::FloatRect rect(0, 0, width, height);
 			window.setView(sf::View(rect));
 
-			camera cam(width, height);
+			indices.clear();
 			rays.clear();
+			camera cam(width, height);
 			for (auto y = 0u; y < height; y++)
 				for (auto x = 0u; x < width; x++)
-					rays.push_back(cam(x, y));
+					indices.push_back(rays.size()), rays.push_back(cam(x, y));
 
 			sum.clear();
 			sum.resize(width * height);
@@ -191,9 +194,14 @@ int main()
 		}
 
 no_events:
+		// Reshuffle from time to time, to avoid possible false sharing?
+		// Or following the ray consumes most of the time,
+		// so false-sharing at `sum[i] +=` is likely negligible?
+		// if (total % 16 == 0) std::shuffle(indices.begin(), indices.end(), engine);
+
+		pool.go(indices.size());
 		total++;
 
-		for (auto i = 0u; i < sum.size(); i++) sum[i] += w.ray_color(rays[i]);
 		for (auto i = 0u; i < sum.size(); i++)
 		{
 			auto c = sum[i] / flt(total);
