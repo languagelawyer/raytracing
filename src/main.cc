@@ -23,8 +23,8 @@
 
 using namespace rt;
 
-std::random_device rd;
-thread_local std::mt19937 engine(rd());
+static std::random_device rd;
+static thread_local std::mt19937 engine(rd());
 
 class sky : public hittable
 {
@@ -142,23 +142,24 @@ public:
 
 int main()
 {
-	std::vector<int> indices;
-	std::vector<ray> rays;
+	unsigned width = 800;
+	unsigned height = 600;
+	camera cam(width, height);
+
 	std::vector<color> sum;
 	unsigned total = 0;
 
-	std::vector<sf::Uint8> rgba;
-	sf::Image image;
-
 	world<16> w;
-	auto fn  = [&](int idx) {
-		auto i = indices[idx];
-		sum[i] += w.ray_color(rays[i]);
+
+	auto box_filter = [distr=std::uniform_real_distribution<flt>(-.5, +.5)]() mutable
+	{ return vec2(distr(engine), distr(engine)); };
+	auto fn  = [&sum, &w, &cam, &width, box_filter](int idx) mutable {
+		sum[idx] += w.ray_color(cam(box_filter, idx % width, idx / width));
 	};
 	threadpool pool(fn, std::thread::hardware_concurrency() ?: 2);
 
-	unsigned width = 800;
-	unsigned height = 600;
+	std::vector<sf::Uint8> rgba;
+	sf::Image image;
 	sf::RenderWindow window({width, height}, "");
 	while (window.isOpen())
 	{
@@ -180,12 +181,7 @@ int main()
 			sf::FloatRect rect(0, 0, width, height);
 			window.setView(sf::View(rect));
 
-			indices.clear();
-			rays.clear();
-			camera cam(width, height);
-			for (auto y = 0u; y < height; y++)
-				for (auto x = 0u; x < width; x++)
-					indices.push_back(rays.size()), rays.push_back(cam(x, y));
+			cam = { width, height };
 
 			sum.clear();
 			sum.resize(width * height);
@@ -194,12 +190,7 @@ int main()
 		}
 
 no_events:
-		// Reshuffle from time to time, to avoid possible false sharing?
-		// Or following the ray consumes most of the time,
-		// so false-sharing at `sum[i] +=` is likely negligible?
-		// if (total % 16 == 0) std::shuffle(indices.begin(), indices.end(), engine);
-
-		pool.go(indices.size());
+		pool.go(width * height);
 		total++;
 
 		for (auto i = 0u; i < sum.size(); i++)
